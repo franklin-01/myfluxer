@@ -7,6 +7,7 @@ import {
 	CANARY_APP_URL,
 	CANARY_MIGRATED_APP_ORIGIN,
 	MIGRATED_APP_ENTRY_PATH,
+	SELF_HOSTED_APP_URL,
 	STABLE_APP_URL,
 	STABLE_MIGRATED_APP_ORIGIN,
 } from '@electron/common/Constants';
@@ -46,7 +47,7 @@ interface PersistedDesktopTroubleshootingSettings {
 
 let config: DesktopConfig = {};
 let configPath: string | null = null;
-let runtimeAppUrlOverride: string | null = null;
+let runtimeAppUrlOverride: string | null = SELF_HOSTED_APP_URL;
 
 function getDefaultDesktopTroubleshootingSettings(): DesktopTroubleshootingSettings {
 	return {

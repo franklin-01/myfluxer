@@ -8,14 +8,26 @@ const path = require('node:path');
 const {promisify} = require('node:util');
 const execFileAsync = promisify(execFile);
 const isLinuxBuild = process.argv.includes('--linux');
-const productName = isCanary ? 'Fluxer Canary' : 'Fluxer';
-const linuxOptDirName = isCanary ? 'fluxer-canary' : 'Fluxer';
+// Self-hosted build identity; set to null to restore the upstream Fluxer identity.
+// Keep in sync with SELF_HOSTED_IDENTITY in src/common/DesktopIdentity.ts.
+const selfHostedIdentity = {
+	productName: 'Chat trelicas',
+	artifactProductName: 'Chat-trelicas',
+	appId: 'br.net.trelicas.chat',
+	packageName: 'chat_trelicas_desktop',
+	linuxPackageName: 'chat-trelicas',
+};
+const productName = selfHostedIdentity?.productName ?? (isCanary ? 'Fluxer Canary' : 'Fluxer');
+const linuxOptDirName = selfHostedIdentity?.linuxPackageName ?? (isCanary ? 'fluxer-canary' : 'Fluxer');
 const installedProductName = isLinuxBuild ? linuxOptDirName : productName;
-const artifactProductName = isCanary ? 'Fluxer-Canary' : 'Fluxer';
-const appId = isCanary ? 'app.fluxer.canary' : 'app.fluxer';
+const artifactProductName = selfHostedIdentity?.artifactProductName ?? (isCanary ? 'Fluxer-Canary' : 'Fluxer');
+const appId = selfHostedIdentity?.appId ?? (isCanary ? 'app.fluxer.canary' : 'app.fluxer');
 const iconDir = isCanary ? 'icons-canary' : 'icons-stable';
-const packageName = isCanary ? 'fluxer_desktop_canary' : 'fluxer_desktop';
-const linuxPackageName = isCanary ? 'fluxer-canary' : 'fluxer';
+const packageName = selfHostedIdentity?.packageName ?? (isCanary ? 'fluxer_desktop_canary' : 'fluxer_desktop');
+const linuxPackageName = selfHostedIdentity?.linuxPackageName ?? (isCanary ? 'fluxer-canary' : 'fluxer');
+const usageDescriptionAppName = selfHostedIdentity?.productName ?? 'Fluxer';
+// Self-hosted builds must not claim the official packages, and have no Apple Developer ID to sign with.
+const declaresLegacyStableReplacement = !isCanary && !selfHostedIdentity;
 const linuxDesktopActionIds = ['open-settings', 'new-dm'];
 const linuxDesktopActionList = `${linuxDesktopActionIds.join(';')};`;
 const linuxGlibcBaseline = Object.freeze({major: 2, minor: 35, patch: 0, name: 'GLIBC_2.35'});
@@ -32,15 +44,16 @@ const legacyLinuxStablePackageNames = {
 	'.deb': legacyLinuxStableDebPackageName,
 	'.rpm': legacyLinuxStableRpmPackageName,
 };
-const legacyLinuxStableDebFpmArgs = isCanary
-	? []
-	: ['--replaces', legacyLinuxStableDebPackageName, '--conflicts', legacyLinuxStableDebPackageName];
-const legacyLinuxStableRpmFpmArgs = isCanary
-	? []
-	: ['--replaces', legacyLinuxStableRpmPackageName, '--conflicts', legacyLinuxStableRpmPackageName];
+const legacyLinuxStableDebFpmArgs = declaresLegacyStableReplacement
+	? ['--replaces', legacyLinuxStableDebPackageName, '--conflicts', legacyLinuxStableDebPackageName]
+	: [];
+const legacyLinuxStableRpmFpmArgs = declaresLegacyStableReplacement
+	? ['--replaces', legacyLinuxStableRpmPackageName, '--conflicts', legacyLinuxStableRpmPackageName]
+	: [];
 const legacyLinuxCanaryOptDir = '/opt/Fluxer Canary';
 const legacyLinuxOptDirSweepScript = path.resolve(__dirname, 'packaging/linux/rpm-post-transaction.sh');
-const legacyLinuxOptDirRpmFpmArgs = isCanary ? ['--rpm-posttrans', legacyLinuxOptDirSweepScript] : [];
+const sweepsLegacyCanaryOptDir = isCanary && !selfHostedIdentity;
+const legacyLinuxOptDirRpmFpmArgs = sweepsLegacyCanaryOptDir ? ['--rpm-posttrans', legacyLinuxOptDirSweepScript] : [];
 const macOSMinimumSystemVersion = '13.0';
 const isMacBuild = process.argv.includes('--mac');
 const isWindowsBuild = process.argv.includes('--win');
@@ -1342,7 +1355,7 @@ async function readRpmPostTransactionScriptlet(artifactPath) {
 }
 
 async function verifyRpmArtifactsSweepTheRenamedInstallDirectory(buildResult) {
-	if (!isCanary) return;
+	if (!sweepsLegacyCanaryOptDir) return;
 	const rpmArtifacts = (buildResult.artifactPaths ?? []).filter(
 		(artifactPath) => path.extname(artifactPath) === '.rpm',
 	);
@@ -1436,12 +1449,12 @@ async function verifyLinuxPackagesDeclareTheLegacyStableReplacement(buildResult)
 			...(replaces.includes(legacyName) ? ['replaces'] : []),
 			...(conflicts.includes(legacyName) ? ['conflicts'] : []),
 		];
-		if (isCanary && declared.length > 0) {
+		if (!declaresLegacyStableReplacement && declared.length > 0) {
 			violations.push({
 				artifactPath,
-				detail: `canary declares ${declared.join(' and ')} on ${legacyName}, which belongs to stable only`,
+				detail: `${isCanary ? 'canary' : 'self-hosted build'} declares ${declared.join(' and ')} on ${legacyName}, which belongs to stable only`,
 			});
-		} else if (!isCanary && declared.length !== 2) {
+		} else if (declaresLegacyStableReplacement && declared.length !== 2) {
 			violations.push({
 				artifactPath,
 				detail: `stable declares ${declared.join(' and ') || 'neither'} on ${legacyName}, expected both`,
@@ -1605,15 +1618,23 @@ module.exports = {
 		minimumSystemVersion: macOSMinimumSystemVersion,
 		icon: `build_resources/${iconDir}/_compiled/AppIcon.icns`,
 		darkModeSupport: true,
-		notarize: true,
-		sign: {
-			hardenedRuntime: true,
-			provisioningProfile,
-			entitlements: isCanary
-				? 'build_resources/entitlements.mac.canary.plist'
-				: 'build_resources/entitlements.mac.stable.plist',
-			entitlementsInherit: 'build_resources/entitlements.mac.inherit.plist',
-		},
+		notarize: !selfHostedIdentity,
+		sign: selfHostedIdentity
+			? {
+					// Ad-hoc signature: the Fluxer team entitlements and provisioning profile would stop the app from launching.
+					identity: '-',
+					hardenedRuntime: true,
+					entitlements: 'build_resources/entitlements.mac.inherit.plist',
+					entitlementsInherit: 'build_resources/entitlements.mac.inherit.plist',
+				}
+			: {
+					hardenedRuntime: true,
+					provisioningProfile,
+					entitlements: isCanary
+						? 'build_resources/entitlements.mac.canary.plist'
+						: 'build_resources/entitlements.mac.stable.plist',
+					entitlementsInherit: 'build_resources/entitlements.mac.inherit.plist',
+				},
 		target: [
 			{
 				target: 'dmg',
@@ -1625,11 +1646,11 @@ module.exports = {
 			},
 		],
 		extendInfo: {
-			NSMicrophoneUsageDescription: 'Fluxer needs access to your microphone to enable voice chat features.',
-			NSCameraUsageDescription: 'Fluxer needs access to your camera to enable video chat features.',
-			NSAppleEventsUsageDescription: 'Fluxer needs access to Apple Events for automation features.',
-			NSAudioCaptureUsageDescription: 'Fluxer captures audio from the screen or window you choose to share.',
-			NSScreenCaptureUsageDescription: 'Fluxer captures the screen or window you choose to share.',
+			NSMicrophoneUsageDescription: `${usageDescriptionAppName} needs access to your microphone to enable voice chat features.`,
+			NSCameraUsageDescription: `${usageDescriptionAppName} needs access to your camera to enable video chat features.`,
+			NSAppleEventsUsageDescription: `${usageDescriptionAppName} needs access to Apple Events for automation features.`,
+			NSAudioCaptureUsageDescription: `${usageDescriptionAppName} captures audio from the screen or window you choose to share.`,
+			NSScreenCaptureUsageDescription: `${usageDescriptionAppName} captures the screen or window you choose to share.`,
 		},
 	},
 	dmg: {

@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {BUILD_CHANNEL, type BuildChannel} from '@electron/common/BuildChannel';
+import {DESKTOP_STORAGE_DIRECTORY_NAME} from '@electron/common/DesktopIdentity';
 import {app} from 'electron';
 
 interface UserDataPaths {
@@ -65,7 +66,7 @@ function resolveUserDataPaths(channel: BuildChannel): {
 	base: string;
 	portable: boolean;
 } {
-	const directoryName = channelStorageDirectoryMap[channel];
+	const directoryName = DESKTOP_STORAGE_DIRECTORY_NAME ?? channelStorageDirectoryMap[channel];
 	const portable = detectPortableMode();
 	portableMode = portable;
 	if (portable) {

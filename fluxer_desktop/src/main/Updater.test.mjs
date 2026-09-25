@@ -137,6 +137,7 @@ function loadUpdater({
 			},
 		},
 		'@electron/common/BuildChannel': {BUILD_CHANNEL: 'canary'},
+		'@electron/common/Constants': {SELF_HOSTED_APP_URL: null},
 		'@electron/common/UserDataPath': {isPortableMode: () => false},
 		'@electron/main/DesktopTray': {destroyDesktopTray() {}},
 		'@electron/main/LinuxSandbox': {isFlatpakRuntime: () => false},

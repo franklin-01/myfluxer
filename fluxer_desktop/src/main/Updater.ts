@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import {createRequire} from 'node:module';
+import {SELF_HOSTED_APP_URL} from '@electron/common/Constants';
 import {isPortableMode} from '@electron/common/UserDataPath';
 import {
 	AppImageChecksumError,
@@ -812,7 +813,8 @@ export function registerUpdater(getMainWindow: () => BrowserWindow | null) {
 		registerManualUpdater(getMainWindow, 'platform');
 		return;
 	}
-	if (isFlatpakRuntime()) {
+	// Official update feeds would replace a self-hosted build with the upstream one.
+	if (isFlatpakRuntime() || SELF_HOSTED_APP_URL) {
 		registerManualUpdater(getMainWindow, 'managed-package');
 		return;
 	}

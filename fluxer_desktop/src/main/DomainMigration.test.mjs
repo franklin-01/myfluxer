@@ -44,15 +44,18 @@ function runModule({sourcePath, code}, requireStub) {
 	return module.exports;
 }
 
-function loadDesktop({channel = 'stable', settings} = {}) {
+function loadDesktop({channel = 'stable', settings, selfHostedAppUrl = null} = {}) {
 	const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), 'fluxer-domain-migration-test-'));
 	const settingsPath = path.join(userDataPath, 'settings.json');
 	if (settings !== undefined) {
 		fs.writeFileSync(settingsPath, JSON.stringify(settings), 'utf-8');
 	}
-	const constants = runModule(constantsSource, (specifier) => {
-		throw new Error(`Unexpected import: ${specifier}`);
-	});
+	const constants = {
+		...runModule(constantsSource, (specifier) => {
+			throw new Error(`Unexpected import: ${specifier}`);
+		}),
+		SELF_HOSTED_APP_URL: selfHostedAppUrl,
+	};
 	const desktopConfig = runModule(desktopConfigSource, (specifier) => {
 		if (specifier === 'node:fs') return fs;
 		if (specifier === 'node:path') return path;
@@ -98,6 +101,16 @@ describe('DesktopConfig app origin', () => {
 
 		assert.equal(stable.desktopConfig.getAppUrl(), 'https://fluxer.com/app');
 		assert.equal(canary.desktopConfig.getAppUrl(), 'https://canary.fluxer.com/app');
+	});
+
+	test('loads the self-hosted app URL over any stored origin', () => {
+		const {desktopConfig} = loadDesktop({
+			selfHostedAppUrl: 'https://chat.example.test:2456',
+			settings: {app_origin: 'https://fluxer.com'},
+		});
+
+		assert.equal(desktopConfig.getAppUrl(), 'https://chat.example.test:2456');
+		assert.equal(desktopConfig.getCustomAppUrl(), 'https://chat.example.test:2456');
 	});
 
 	test('loads the legacy root for a stored legacy origin', () => {
