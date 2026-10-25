@@ -64,8 +64,16 @@ jobs:
       VERSION: ${{ needs.meta.outputs.version }}
       BUILD_VERSION: ${{ needs.meta.outputs.version }}
       PUBLIC_BUILD_VERSION: ${{ needs.meta.outputs.version }}
-      CI_TOOL: ${{ github.workspace }}/source/tools/ci/Cargo.toml
+      # The CI helper runs from its own checkout, like build-desktop.yaml: the
+      # desktop build calls tools/ci again inside source/, and Windows cannot
+      # replace a fluxer-ci.exe that is still running.
+      CI_TOOL: ${{ github.workspace }}/_ci/tools/ci/Cargo.toml
     steps:
+      - name: Checkout CI helpers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: _ci
+
       - name: Checkout source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
