@@ -1,6 +1,6 @@
 # Build do Chat trelicas (desktop)
 
-Este checkout do Fluxer gera um app desktop que abre `https://chat.trelicas.net.br:2456` em vez do servidor oficial.
+Este checkout do Fluxer gera um app desktop que abre `https://chat.trelicas.net.br` em vez do servidor oficial.
 
 - URL do servidor: `SELF_HOSTED_APP_URL` em `src/common/Constants.ts`
 - Nome e identificadores do app: `SELF_HOSTED_IDENTITY` em `src/common/DesktopIdentity.ts` e `selfHostedIdentity` em `electron-builder.config.cjs` (mantenha os dois iguais)
