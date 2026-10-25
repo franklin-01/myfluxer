@@ -1,10 +1,12 @@
 # Builds the Chat trelicas desktop app (the self-hosted identity in
-# fluxer_desktop/SELF_HOSTED_BUILD.md) for Windows x64 and Linux x64.
+# fluxer_desktop/SELF_HOSTED_BUILD.md) for Windows x64, Linux x64 and macOS
+# Apple Silicon.
 #
 # It reuses the tools/ci steps of build-desktop.yaml but needs no secrets:
-# nothing is signed, notarized or uploaded to a release feed. The packages are
-# attached to the run as artifacts and, when publish_release is set, to a
-# GitHub release in this repository. macOS is built locally, see the guide.
+# nothing is notarized or uploaded to a release feed, and the macOS app gets
+# the same ad-hoc signature as a local build. The packages are attached to the
+# run as artifacts and, when publish_release is set, to a GitHub release in
+# this repository.
 name: Build Chat trelicas desktop
 
 on:
@@ -48,7 +50,7 @@ jobs:
           echo "Version: $version"
 
   build:
-    name: Build ${{ matrix.platform }} (x64)
+    name: Build ${{ matrix.platform }} (${{ matrix.arch }})
     needs: meta
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
@@ -58,12 +60,17 @@ jobs:
         include:
           - platform: windows
             os: windows-2025
+            arch: x64
           # The packaging rejects binaries that need glibc above 2.35.
           - platform: linux
             os: ubuntu-22.04
+            arch: x64
+          - platform: macos
+            os: macos-15
+            arch: arm64
     env:
-      ARCH: x64
-      ELECTRON_ARCH: x64
+      ARCH: ${{ matrix.arch }}
+      ELECTRON_ARCH: ${{ matrix.arch }}
       BUILD_CHANNEL: stable
       RELEASE_CHANNEL: stable
       PUBLIC_RELEASE_CHANNEL: stable
@@ -106,7 +113,7 @@ jobs:
           SUBST_TARGET: ${{ github.workspace }}/source
         run: cargo run --locked --quiet --manifest-path ${{ env.CI_TOOL }} -- build-desktop --step windows_paths
 
-      - name: Set workdir (Linux)
+      - name: Set workdir (Unix)
         if: runner.os != 'Windows'
         env:
           SUBST_TARGET: ${{ github.workspace }}/source
@@ -124,7 +131,7 @@ jobs:
         if: runner.os == 'Windows'
         run: cargo run --locked --quiet --manifest-path ${{ env.CI_TOOL }} -- build-desktop --step resolve_pnpm_store_windows
 
-      - name: Resolve pnpm store path (Linux)
+      - name: Resolve pnpm store path (Unix)
         if: runner.os != 'Windows'
         run: cargo run --locked --quiet --manifest-path ${{ env.CI_TOOL }} -- build-desktop --step resolve_pnpm_store_unix
 
@@ -132,9 +139,13 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ${{ env.PNPM_STORE_PATH }}
-          key: ${{ runner.os }}-x64-pnpm-store-${{ hashFiles('source/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-pnpm-store-${{ hashFiles('source/pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-x64-pnpm-store-
+            ${{ runner.os }}-${{ matrix.arch }}-pnpm-store-
+
+      - name: Install Python setuptools (macOS)
+        if: matrix.platform == 'macos'
+        run: cargo run --locked --quiet --manifest-path ${{ env.CI_TOOL }} -- build-desktop --step install_setuptools_macos
 
       - name: Install Linux dependencies
         if: matrix.platform == 'linux'
@@ -148,6 +159,13 @@ jobs:
         with:
           toolchain: "1.98.1"
           targets: x86_64-unknown-linux-gnu
+
+      - name: Set up Rust toolchain (macOS)
+        if: matrix.platform == 'macos'
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de
+        with:
+          toolchain: "1.98.1"
+          targets: aarch64-apple-darwin
 
       - name: Set up MSVC env (Windows)
         if: matrix.platform == 'windows'
@@ -191,6 +209,14 @@ jobs:
           USE_SYSTEM_FPM: true
         run: cargo run --locked --quiet --manifest-path ${{ env.CI_TOOL }} -- build-desktop --step build_app_linux
 
+      # build_app_macos in tools/ci requires the Fluxer team's Apple signing
+      # keychain. The self-hosted identity signs ad hoc, so run electron-builder
+      # directly, the same way as a local build.
+      - name: Build Electron app (macOS)
+        if: matrix.platform == 'macos'
+        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
+        run: pnpm exec electron-builder --config electron-builder.config.cjs --mac --${{ matrix.arch }}
+
       # The Windows target is an unpacked folder; whoever uses it extracts the
       # ZIP and opens "Chat trelicas.exe".
       - name: Collect packages
@@ -198,19 +224,20 @@ jobs:
         working-directory: source/fluxer_desktop/dist-electron
         run: |
           mkdir -p "$GITHUB_WORKSPACE/out"
-          if [ "${{ matrix.platform }}" = windows ]; then
-            (cd win-unpacked && 7z a -tzip -mx=5 "$GITHUB_WORKSPACE/out/Chat-trelicas-$VERSION-win-x64.zip" . > /dev/null)
-          else
-            cp -v ./*.AppImage ./*.deb ./*.rpm ./*.tar.gz "$GITHUB_WORKSPACE/out/"
-          fi
+          case "${{ matrix.platform }}" in
+            windows) (cd win-unpacked && 7z a -tzip -mx=5 "$GITHUB_WORKSPACE/out/Chat-trelicas-$VERSION-win-$ARCH.zip" . > /dev/null) ;;
+            linux) cp -v ./*.AppImage ./*.deb ./*.rpm ./*.tar.gz "$GITHUB_WORKSPACE/out/" ;;
+            macos) cp -v "./Chat-trelicas-$VERSION-mac-$ARCH.dmg" "$GITHUB_WORKSPACE/out/" ;;
+          esac
           cd "$GITHUB_WORKSPACE/out"
-          sha256sum * > "SHA256SUMS-${{ matrix.platform }}.txt"
+          if command -v sha256sum > /dev/null; then sha256sum * > "../SHA256SUMS-${{ matrix.platform }}.txt"; else shasum -a 256 * > "../SHA256SUMS-${{ matrix.platform }}.txt"; fi
+          mv "../SHA256SUMS-${{ matrix.platform }}.txt" .
           ls -l
 
       - name: Upload packages
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: chat-trelicas-${{ needs.meta.outputs.version }}-${{ matrix.platform }}-x64
+          name: chat-trelicas-${{ needs.meta.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}
           path: out
           if-no-files-found: error
           retention-days: 30

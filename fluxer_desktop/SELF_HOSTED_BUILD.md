@@ -8,33 +8,30 @@ Este checkout do Fluxer gera um app desktop que abre `https://chat.trelicas.net.
 
 Cada sistema precisa ser compilado nele mesmo, porque os addons nativos em Rust só compilam no sistema de destino.
 
-## Windows e Linux pelo GitHub Actions
+## Windows, Linux e macOS pelo GitHub Actions
 
-O workflow `.github/workflows/build-chat-trelicas.yaml` compila Windows x64 e Linux x64 nos runners do GitHub, sem precisar de uma máquina com esses sistemas e sem segredos.
+O workflow `.github/workflows/build-chat-trelicas.yaml` compila os três sistemas nos runners do GitHub, sem precisar de uma máquina com cada sistema e sem segredos:
+
+- Windows x64;
+- Linux x64;
+- macOS Apple Silicon, com a mesma assinatura ad-hoc do build local.
 
 1. No GitHub, abra **Actions → Build Chat trelicas desktop → Run workflow** e escolha a branch `selfhost/chat-trelicas`.
 2. Informe a versão (ex.: `2026.1025.0`). Se deixar vazio, ele usa a data de hoje e o número da execução.
-3. Ao terminar (uns 30–60 minutos), baixe na página da execução os artefatos `chat-trelicas-<versão>-windows-x64` e `chat-trelicas-<versão>-linux-x64`. Eles ficam lá por 30 dias.
+3. Ao terminar (uns 30–60 minutos), baixe na página da execução os artefatos `chat-trelicas-<versão>-<sistema>-<arquitetura>`. Eles ficam lá por 30 dias.
    - Windows: um `.zip`. Quem for usar extrai a pasta e abre o `Chat trelicas.exe`.
    - Linux: `.AppImage`, `.deb`, `.rpm` e `.tar.gz`.
+   - macOS: o `.dmg`.
    - Cada um vem com um `SHA256SUMS`.
 
-O macOS continua sendo compilado localmente, como na seção "macOS Apple Silicon". As seções abaixo servem para compilar Windows e Linux à mão.
+As seções abaixo servem para compilar à mão, numa máquina de cada sistema.
 
 ## Publicar uma release
 
-Para publicar uma versão:
+Rode o workflow acima com a versão e a caixa **publish_release** marcada. Ao final, ele cria no GitHub a release `chat-trelicas-v<versão>` com os arquivos dos três sistemas e as instruções de instalação.
 
-1. Compile o macOS localmente.
-2. Rode o workflow acima com a mesma versão e a caixa **publish_release** marcada. Ao final, ele cria no GitHub a release `chat-trelicas-v<versão>` com os arquivos de Windows e Linux e as instruções de instalação.
-   - Rodar de novo para uma versão que já tem release substitui os arquivos.
-3. Na página da release, clique em **Edit** e anexe o `.dmg` do macOS e o `SHA256SUMS-macos.txt`:
-
-   ```bash
-   cd fluxer_desktop/dist-electron && shasum -a 256 Chat-trelicas-<versão>-mac-arm64.dmg > SHA256SUMS-macos.txt
-   ```
-
-A release é pública. Os usuários baixam as versões novas por ela, porque o app não se atualiza sozinho.
+- Rodar de novo para uma versão que já tem release substitui os arquivos.
+- A release é pública. Os usuários baixam as versões novas por ela, porque o app não se atualiza sozinho.
 
 ## Antes de começar
 
