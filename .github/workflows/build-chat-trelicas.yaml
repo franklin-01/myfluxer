@@ -3,7 +3,8 @@
 #
 # It reuses the tools/ci steps of build-desktop.yaml but needs no secrets:
 # nothing is signed, notarized or uploaded to a release feed. The packages are
-# attached to the run as artifacts. macOS is built locally, see the guide.
+# attached to the run as artifacts and, when publish_release is set, to a
+# GitHub release in this repository. macOS is built locally, see the guide.
 name: Build Chat trelicas desktop
 
 on:
@@ -13,6 +14,11 @@ on:
         description: Version as YEAR.MDD.N, such as 2026.1025.0. Leave empty for today's date and the run number.
         required: false
         default: ""
+      publish_release:
+        description: Publish a GitHub release (tag chat-trelicas-v<version>) with the packages.
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -209,3 +215,52 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
+
+  release:
+    name: Publish GitHub release
+    needs:
+      - meta
+      - build
+    if: ${{ inputs.publish_release }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          path: packages
+          pattern: chat-trelicas-${{ needs.meta.outputs.version }}-*
+          merge-multiple: true
+
+      # Re-running for a version that already has a release replaces its
+      # files instead of failing.
+      - name: Publish release
+        run: |
+          tag="chat-trelicas-v$VERSION"
+          cat > notes.md <<NOTES
+          App desktop do Chat trelicas, que abre https://chat.trelicas.net.br. Feito a partir do Fluxer (código neste repositório, licença AGPL-3.0).
+
+          | Sistema | Arquivo |
+          |---|---|
+          | Windows x64 | \`Chat-trelicas-$VERSION-win-x64.zip\`: extraia e abra \`Chat trelicas.exe\` |
+          | Linux x64 | \`.AppImage\` (\`chmod +x\` e abra), \`.deb\` (Ubuntu/Debian), \`.rpm\` (Fedora) ou \`.tar.gz\` |
+          | macOS (Apple Silicon) | \`.dmg\`: arraste o app para Aplicativos |
+
+          Os apps não têm assinatura de desenvolvedor, então o sistema avisa na primeira abertura:
+          - **Windows:** em "O Windows protegeu o computador", clique em "Mais informações" e depois em "Executar assim mesmo".
+          - **macOS:** abra uma vez, vá em Ajustes do Sistema → Privacidade e Segurança e clique em "Abrir Mesmo Assim".
+
+          O app não se atualiza sozinho. Baixe as versões novas aqui. As somas SHA-256 estão nos arquivos \`SHA256SUMS-*.txt\`.
+          NOTES
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$tag" packages/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
+          else
+            gh release create "$tag" packages/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "Chat trelicas $VERSION" --notes-file notes.md
+          fi
+          echo "Release: https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag"

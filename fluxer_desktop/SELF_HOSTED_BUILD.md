@@ -21,6 +21,21 @@ O workflow `.github/workflows/build-chat-trelicas.yaml` compila Windows x64 e Li
 
 O macOS continua sendo compilado localmente, como na seção "macOS Apple Silicon". As seções abaixo servem para compilar Windows e Linux à mão.
 
+## Publicar uma release
+
+Para publicar uma versão:
+
+1. Compile o macOS localmente.
+2. Rode o workflow acima com a mesma versão e a caixa **publish_release** marcada. Ao final, ele cria no GitHub a release `chat-trelicas-v<versão>` com os arquivos de Windows e Linux e as instruções de instalação.
+   - Rodar de novo para uma versão que já tem release substitui os arquivos.
+3. Na página da release, clique em **Edit** e anexe o `.dmg` do macOS e o `SHA256SUMS-macos.txt`:
+
+   ```bash
+   cd fluxer_desktop/dist-electron && shasum -a 256 Chat-trelicas-<versão>-mac-arm64.dmg > SHA256SUMS-macos.txt
+   ```
+
+A release é pública. Os usuários baixam as versões novas por ela, porque o app não se atualiza sozinho.
+
 ## Antes de começar
 
 Leve este checkout, com as alterações, para a máquina de build. Pode ser por um remoto git seu ou copiando a pasta sem `node_modules`, `target` e `fluxer_desktop/dist-electron`.
