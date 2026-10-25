@@ -8,6 +8,19 @@ Este checkout do Fluxer gera um app desktop que abre `https://chat.trelicas.net.
 
 Cada sistema precisa ser compilado nele mesmo, porque os addons nativos em Rust só compilam no sistema de destino.
 
+## Windows e Linux pelo GitHub Actions
+
+O workflow `.github/workflows/build-chat-trelicas.yaml` compila Windows x64 e Linux x64 nos runners do GitHub, sem precisar de uma máquina com esses sistemas e sem segredos.
+
+1. No GitHub, abra **Actions → Build Chat trelicas desktop → Run workflow** e escolha a branch `selfhost/chat-trelicas`.
+2. Informe a versão (ex.: `2026.1025.0`). Se deixar vazio, ele usa a data de hoje e o número da execução.
+3. Ao terminar (uns 30–60 minutos), baixe na página da execução os artefatos `chat-trelicas-<versão>-windows-x64` e `chat-trelicas-<versão>-linux-x64`. Eles ficam lá por 30 dias.
+   - Windows: um `.zip`. Quem for usar extrai a pasta e abre o `Chat trelicas.exe`.
+   - Linux: `.AppImage`, `.deb`, `.rpm` e `.tar.gz`.
+   - Cada um vem com um `SHA256SUMS`.
+
+O macOS continua sendo compilado localmente, como na seção "macOS Apple Silicon". As seções abaixo servem para compilar Windows e Linux à mão.
+
 ## Antes de começar
 
 Leve este checkout, com as alterações, para a máquina de build. Pode ser por um remoto git seu ou copiando a pasta sem `node_modules`, `target` e `fluxer_desktop/dist-electron`.
